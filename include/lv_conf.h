@@ -1,0 +1,56 @@
+#ifndef LV_CONF_H
+#define LV_CONF_H
+
+/* Minimal LVGL configuration for the ESP32-2432S028R local UI. */
+#define LV_COLOR_DEPTH 16
+#define LV_MEM_SIZE (40U * 1024U)
+
+#define LV_DEF_REFR_PERIOD 20
+#define LV_INDEV_DEF_READ_PERIOD 10
+#define LV_DPI_DEF 130
+
+#define LV_USE_OS LV_OS_NONE
+#define LV_USE_LOG 0
+#define LV_USE_ASSERT_NULL 1
+#define LV_USE_ASSERT_MALLOC 1
+#define LV_USE_ASSERT_STYLE 0
+
+#define LV_FONT_MONTSERRAT_8 1
+#define LV_FONT_MONTSERRAT_10 1
+#define LV_FONT_MONTSERRAT_12 1
+#define LV_FONT_MONTSERRAT_14 1
+#define LV_FONT_MONTSERRAT_16 1
+#define LV_FONT_MONTSERRAT_20 1
+#define LV_FONT_MONTSERRAT_24 1
+#define LV_FONT_MONTSERRAT_28 1
+#define LV_FONT_DEFAULT &lv_font_montserrat_14
+
+#define LV_USE_BAR 1
+#define LV_USE_BUTTON 1
+#define LV_USE_LABEL 1
+#define LV_USE_ANIMIMG 0
+#define LV_USE_CALENDAR 0
+#define LV_USE_CHART 1
+#define LV_USE_COLORWHEEL 0
+#define LV_USE_IMAGEBUTTON 0
+#define LV_USE_KEYBOARD 1
+#define LV_USE_LED 0
+#define LV_USE_LIST 0
+#define LV_USE_LOTTIE 0
+#define LV_USE_MENU 0
+#define LV_USE_MSGBOX 0
+#define LV_USE_SCALE 0
+#define LV_USE_SPAN 0
+#define LV_USE_SPINBOX 0
+#define LV_USE_SPINNER 0
+#define LV_USE_TABLE 0
+#define LV_USE_TABVIEW 0
+#define LV_USE_TILEVIEW 0
+#define LV_USE_WIN 0
+
+#define LV_USE_FLEX 1
+
+#define LV_BUILD_EXAMPLES 0
+#define LV_BUILD_DEMOS 0
+
+#endif  // LV_CONF_H

@@ -1,0 +1,13 @@
+.pio/
+.pio-core/
+.pio-cache/
+.pio-offline/
+.pio-local/
+.repo-metadata/
+.vscode/
+compile_commands.json
+
+# Local credentials and generated/diagnostic artifacts.
+include/NetworkConfig.h
+outputs/*.zip
+work/
