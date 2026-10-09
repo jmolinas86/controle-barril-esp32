@@ -64,7 +64,7 @@ bool TemperatureService::begin(const std::uint32_t nowMs,
 
   KEEZER_LOG_INFO(
       kLogTag,
-      "Temperature service started: sensor=%s output=SIMULATED setpoint=%d.%02dC hysteresis=%u.%02uC minOff=%lus minOn=%lus timeout=%lus",
+      "Temperature service started: sensor=%s output=GPIO setpoint=%d.%02dC hysteresis=%u.%02uC minOff=%lus minOn=%lus timeout=%lus",
       sensorReady ? "READY" : "FAILED",
       static_cast<int>(settings.setpointCentiCelsius / 100),
       static_cast<int>(settings.setpointCentiCelsius >= 0
