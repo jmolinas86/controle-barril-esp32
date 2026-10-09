@@ -4,11 +4,19 @@
 
 #include <array>
 
+#include "diagnostics/Logger.h"
+
 namespace keezer::temperature {
+namespace {
+
+constexpr char kLogTag[] = "TEMP_SENSOR";
+constexpr std::uint8_t kDs18b20FamilyCode = 0x28U;
+
+}  // namespace
 
 Ds18b20TemperatureSensor::Ds18b20TemperatureSensor(
     const std::uint8_t dataPin)
-    : dataPin_(dataPin) {}
+    : dataPin_(dataPin), bus_(dataPin) {}
 
 bool Ds18b20TemperatureSensor::begin(const std::uint32_t nowMs) {
   sample_ = {};
@@ -16,10 +24,16 @@ bool Ds18b20TemperatureSensor::begin(const std::uint32_t nowMs) {
   lastSampleAtMs_ = 0U;
   lastDiscoveryAtMs_ = nowMs - kDiscoveryRetryMs;
   sensorPresent_ = false;
+  addressValid_ = false;
   conversionPending_ = false;
   started_ = true;
-  pinMode(dataPin_, INPUT_PULLUP);
-  return requestConversion(nowMs);
+  const bool ready = requestConversion(nowMs);
+  if (!ready) {
+    KEEZER_LOG_WARN(kLogTag,
+                    "DS18B20_NOT_FOUND gpio=%u expected_family=0x28",
+                    static_cast<unsigned int>(dataPin_));
+  }
+  return ready;
 }
 
 void Ds18b20TemperatureSensor::update(const std::uint32_t nowMs) {
@@ -63,18 +77,45 @@ bool Ds18b20TemperatureSensor::latestSample(
   return true;
 }
 
+bool Ds18b20TemperatureSensor::discoverSensor() {
+  bus_.reset_search();
+  std::array<std::uint8_t, 8U> candidate{};
+  while (bus_.search(candidate.data())) {
+    if (OneWire::crc8(candidate.data(), 7U) != candidate[7U] ||
+        candidate[0U] != kDs18b20FamilyCode) {
+      continue;
+    }
+    address_ = candidate;
+    addressValid_ = true;
+    KEEZER_LOG_INFO(
+        kLogTag,
+        "DS18B20_FOUND gpio=%u rom=%02X%02X%02X%02X%02X%02X%02X%02X",
+        static_cast<unsigned int>(dataPin_), address_[0U], address_[1U],
+        address_[2U], address_[3U], address_[4U], address_[5U], address_[6U],
+        address_[7U]);
+    return true;
+  }
+  bus_.reset_search();
+  addressValid_ = false;
+  return false;
+}
+
 bool Ds18b20TemperatureSensor::requestConversion(
     const std::uint32_t nowMs) {
   lastDiscoveryAtMs_ = nowMs;
-  if (!busReset()) {
+  if (!addressValid_ && !discoverSensor()) {
     sensorPresent_ = false;
     conversionPending_ = false;
     return false;
   }
-  // A single externally powered DS18B20 is installed, so Skip ROM is safe.
-  busWriteByte(0xCCU);
-  busWriteByte(0x44U);
-  pinMode(dataPin_, INPUT_PULLUP);
+  if (!bus_.reset()) {
+    sensorPresent_ = false;
+    addressValid_ = false;
+    conversionPending_ = false;
+    return false;
+  }
+  bus_.select(address_.data());
+  bus_.write(0x44U, 0U);
   sensorPresent_ = true;
   conversionRequestedAtMs_ = nowMs;
   conversionPending_ = true;
@@ -83,13 +124,16 @@ bool Ds18b20TemperatureSensor::requestConversion(
 
 models::TemperatureSampleQuality
 Ds18b20TemperatureSensor::readTemperature(std::int16_t& centiCelsius) {
-  if (!busReset()) return models::TemperatureSampleQuality::Disconnected;
-  busWriteByte(0xCCU);
-  busWriteByte(0xBEU);
+  if (!addressValid_ || !bus_.reset()) {
+    addressValid_ = false;
+    return models::TemperatureSampleQuality::Disconnected;
+  }
+  bus_.select(address_.data());
+  bus_.write(0xBEU);
 
   std::array<std::uint8_t, 9U> scratchpad{};
   for (std::uint8_t index = 0U; index < scratchpad.size(); ++index) {
-    scratchpad[index] = busReadByte();
+    scratchpad[index] = bus_.read();
   }
   bool allZero = true;
   bool allOnes = true;
@@ -103,7 +147,7 @@ Ds18b20TemperatureSensor::readTemperature(std::int16_t& centiCelsius) {
   if (allZero || allOnes) {
     return models::TemperatureSampleQuality::ReadError;
   }
-  if (crc8(scratchpad.data(), 8U) != scratchpad[8U]) {
+  if (OneWire::crc8(scratchpad.data(), 8U) != scratchpad[8U]) {
     return models::TemperatureSampleQuality::ReadError;
   }
   const std::int16_t raw = static_cast<std::int16_t>(
@@ -112,88 +156,6 @@ Ds18b20TemperatureSensor::readTemperature(std::int16_t& centiCelsius) {
   const std::int32_t scaled = static_cast<std::int32_t>(raw) * 100;
   centiCelsius = static_cast<std::int16_t>(scaled / 16);
   return models::TemperatureSampleQuality::Valid;
-}
-
-bool Ds18b20TemperatureSensor::busReset() {
-  // A healthy externally pulled-up 1-Wire bus must be idle HIGH. Checking it
-  // before the reset pulse distinguishes a real presence pulse from a wiring
-  // error or a data line shorted to ground.
-  pinMode(dataPin_, INPUT_PULLUP);
-  delayMicroseconds(5U);
-  if (digitalRead(dataPin_) == LOW) {
-    return false;
-  }
-
-  noInterrupts();
-  pinMode(dataPin_, OUTPUT);
-  digitalWrite(dataPin_, LOW);
-  delayMicroseconds(480U);
-  pinMode(dataPin_, INPUT_PULLUP);
-  delayMicroseconds(70U);
-  const bool present = digitalRead(dataPin_) == LOW;
-  delayMicroseconds(410U);
-  const bool released = digitalRead(dataPin_) == HIGH;
-  interrupts();
-  return present && released;
-}
-
-void Ds18b20TemperatureSensor::busWriteBit(const bool value) {
-  noInterrupts();
-  pinMode(dataPin_, OUTPUT);
-  digitalWrite(dataPin_, LOW);
-  if (value) {
-    delayMicroseconds(6U);
-    pinMode(dataPin_, INPUT_PULLUP);
-    delayMicroseconds(64U);
-  } else {
-    delayMicroseconds(60U);
-    pinMode(dataPin_, INPUT_PULLUP);
-    delayMicroseconds(10U);
-  }
-  interrupts();
-}
-
-bool Ds18b20TemperatureSensor::busReadBit() {
-  noInterrupts();
-  pinMode(dataPin_, OUTPUT);
-  digitalWrite(dataPin_, LOW);
-  delayMicroseconds(3U);
-  pinMode(dataPin_, INPUT_PULLUP);
-  delayMicroseconds(10U);
-  const bool value = digitalRead(dataPin_) == HIGH;
-  delayMicroseconds(53U);
-  interrupts();
-  return value;
-}
-
-void Ds18b20TemperatureSensor::busWriteByte(std::uint8_t value) {
-  for (std::uint8_t bit = 0U; bit < 8U; ++bit) {
-    busWriteBit((value & 0x01U) != 0U);
-    value >>= 1U;
-  }
-}
-
-std::uint8_t Ds18b20TemperatureSensor::busReadByte() {
-  std::uint8_t value = 0U;
-  for (std::uint8_t bit = 0U; bit < 8U; ++bit) {
-    if (busReadBit()) value |= static_cast<std::uint8_t>(1U << bit);
-  }
-  return value;
-}
-
-std::uint8_t Ds18b20TemperatureSensor::crc8(const std::uint8_t* const data,
-                                            const std::uint8_t size) {
-  std::uint8_t crc = 0U;
-  for (std::uint8_t index = 0U; index < size; ++index) {
-    std::uint8_t byte = data[index];
-    for (std::uint8_t bit = 0U; bit < 8U; ++bit) {
-      const bool mix = ((crc ^ byte) & 0x01U) != 0U;
-      crc >>= 1U;
-      if (mix) crc ^= 0x8CU;
-      byte >>= 1U;
-    }
-  }
-  return crc;
 }
 
 void Ds18b20TemperatureSensor::publish(
