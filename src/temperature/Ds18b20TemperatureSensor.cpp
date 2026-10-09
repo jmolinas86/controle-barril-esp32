@@ -91,6 +91,18 @@ Ds18b20TemperatureSensor::readTemperature(std::int16_t& centiCelsius) {
   for (std::uint8_t index = 0U; index < scratchpad.size(); ++index) {
     scratchpad[index] = busReadByte();
   }
+  bool allZero = true;
+  bool allOnes = true;
+  for (const std::uint8_t value : scratchpad) {
+    allZero = allZero && value == 0x00U;
+    allOnes = allOnes && value == 0xFFU;
+  }
+  // A line held LOW produces nine zero bytes and even passes the Dallas CRC
+  // by coincidence. Neither an all-zero nor an all-one scratchpad is a valid
+  // DS18B20 response, so never publish it as a real 0.00 C measurement.
+  if (allZero || allOnes) {
+    return models::TemperatureSampleQuality::ReadError;
+  }
   if (crc8(scratchpad.data(), 8U) != scratchpad[8U]) {
     return models::TemperatureSampleQuality::ReadError;
   }
@@ -103,6 +115,16 @@ Ds18b20TemperatureSensor::readTemperature(std::int16_t& centiCelsius) {
 }
 
 bool Ds18b20TemperatureSensor::busReset() {
+  // A healthy externally pulled-up 1-Wire bus must be idle HIGH. Checking it
+  // before the reset pulse distinguishes a real presence pulse from a wiring
+  // error or a data line shorted to ground.
+  pinMode(dataPin_, INPUT_PULLUP);
+  delayMicroseconds(5U);
+  if (digitalRead(dataPin_) == LOW) {
+    return false;
+  }
+
+  noInterrupts();
   pinMode(dataPin_, OUTPUT);
   digitalWrite(dataPin_, LOW);
   delayMicroseconds(480U);
@@ -110,7 +132,9 @@ bool Ds18b20TemperatureSensor::busReset() {
   delayMicroseconds(70U);
   const bool present = digitalRead(dataPin_) == LOW;
   delayMicroseconds(410U);
-  return present;
+  const bool released = digitalRead(dataPin_) == HIGH;
+  interrupts();
+  return present && released;
 }
 
 void Ds18b20TemperatureSensor::busWriteBit(const bool value) {

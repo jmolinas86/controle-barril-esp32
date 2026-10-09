@@ -108,8 +108,12 @@ void FreezerCard::update(const app::FreezerViewData& data) {
   }
 
   char value[20]{};
-  std::snprintf(value, sizeof(value), "%.1f",
-                static_cast<double>(data.temperatureC));
+  if (data.hasTemperature) {
+    std::snprintf(value, sizeof(value), "%.1f",
+                  static_cast<double>(data.temperatureC));
+  } else {
+    std::snprintf(value, sizeof(value), "--.-");
+  }
   setLabelText(temperatureValue_, value);
   std::snprintf(value, sizeof(value), "%.1f",
                 static_cast<double>(data.setpointC));
