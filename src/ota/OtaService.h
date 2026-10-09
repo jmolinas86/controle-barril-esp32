@@ -26,6 +26,9 @@ class OtaService final {
 
   bool authenticate(bool requestChallenge);
   void handlePage();
+  void handleLogsPage();
+  void handleLogsData();
+  void handleLogsClear();
   void handleUpload();
   void handleUploadFinished();
   void failUpload(const char* reason);

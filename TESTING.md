@@ -16,12 +16,13 @@ Na raiz do projeto:
 platformio run -e esp32_2432s028
 ```
 
-Última compilação validada antes da documentação:
+Última compilação validada, incluindo DS18B20 real, relé e monitor web:
 
-- RAM estática: 123.968 bytes (37,8%);
-- flash: 1.521.773 bytes (80,1%);
-- `firmware.bin`: 1.528.352 bytes;
-- SHA-256: `B8A2720260258C52CA283DA819B2074367D45DC190D4AE56342B177F324A4C29`.
+- RAM estática: 123.872 bytes (37,8%);
+- flash: 1.535.957 bytes (80,8%);
+- `firmware.bin`: 1.542.528 bytes;
+- SHA-256: `0CECD7C5A59B57A460D00DC32CF6C30A79353F8B064D52295BABED056CE1EFAF`;
+- buffer de logs: 12.288 bytes alocados uma vez no heap durante o boot.
 
 ## Gravar e monitorar
 
@@ -32,6 +33,11 @@ platformio device monitor -e esp32_2432s028
 
 Se a porta não for detectada, confira o cabo, driver USB e feche outros
 monitores seriais. O monitor opera a 115.200 baud.
+
+Sem acesso à serial, abra `http://<IP-DO-CONTROLADOR>/logs`, autentique com as
+credenciais da OTA e confirme atualização a cada segundo. Pause, continue e
+limpe o buffer; a UI, a leitura de temperatura e o controle do compressor devem
+permanecer responsivos.
 
 ## Testar a OTA da Fase 19.1
 

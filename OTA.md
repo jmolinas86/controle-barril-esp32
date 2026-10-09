@@ -9,6 +9,12 @@ Depois que o controlador estiver conectado à rede, consulte o IP em
 http://<IP-DO-CONTROLADOR>/update
 ```
 
+O monitor de diagnóstico usa a mesma autenticação:
+
+```text
+http://<IP-DO-CONTROLADOR>/logs
+```
+
 A página utiliza autenticação HTTP Basic. As credenciais ficam nas macros
 `KEEZER_OTA_USERNAME` e `KEEZER_OTA_PASSWORD`, em
 `include/NetworkConfig.h`. A configuração inicial de bancada é:
@@ -27,13 +33,13 @@ controlador à internet.
 Compile:
 
 ```powershell
-platformio run -e esp32_2432s028r
+platformio run -e esp32_2432s028
 ```
 
 Selecione na página OTA:
 
 ```text
-.pio/build/esp32_2432s028r/firmware.bin
+.pio/build/esp32_2432s028/firmware.bin
 ```
 
 Não envie `bootloader.bin`, `partitions.bin` nem uma imagem de filesystem. A
@@ -72,12 +78,23 @@ Em falha:
 OTA_FAILED reason=<motivo> code=<codigo>
 ```
 
+## Monitor de logs
+
+A página `/logs` mantém em RAM as 64 mensagens mais recentes, atualiza a cada
+segundo e permite pausar, acompanhar automaticamente e limpar o buffer. O
+conteúdo é volátil: reiniciar o controlador apaga o histórico. Nada é gravado
+na flash ou no microSD, evitando desgaste e interferência no controle.
+
+O endpoint de texto `/api/logs` e a limpeza por `POST /api/logs/clear` usam a
+mesma autenticação HTTP Basic da OTA. O acesso deve permanecer restrito à rede
+local confiável.
+
 ## Primeira instalação
 
 O firmware que cria a interface OTA precisa ser gravado uma vez pelo USB:
 
 ```powershell
-platformio run -e esp32_2432s028r -t upload
+platformio run -e esp32_2432s028 -t upload
 ```
 
 Depois dessa primeira gravação, as versões seguintes podem ser enviadas pelo

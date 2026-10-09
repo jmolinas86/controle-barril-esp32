@@ -54,6 +54,45 @@ x.send(data)};
 </script></main></body></html>
 )HTML";
 
+const char kLogsPage[] PROGMEM = R"HTML(
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Keezer Logs</title><style>
+*{box-sizing:border-box}body{margin:0;background:#020913;color:#e9f4ff;
+font:14px Arial,sans-serif;padding:12px}main{max-width:1100px;margin:auto}
+header{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+h1{margin:0 auto 0 0;color:#18b8ff;font-size:21px}button,a{border:1px solid
+#18b8ff;background:#064b8d;color:#fff;padding:9px 12px;border-radius:6px;
+font-weight:bold;text-decoration:none}label{color:#a9bfd0}pre{margin:0;height:72vh;
+overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid #087fc0;
+border-radius:8px;background:#00070d;color:#bde9ff;padding:12px;
+font:12px/1.45 Consolas,monospace}#state{margin:8px 0;color:#7bdc00}
+.paused{color:#ffb020!important}.error{color:#ff5252!important}
+</style></head><body><main><header><h1>MONITOR DE LOGS</h1>
+<button id="pause">PAUSAR</button><button id="clear">LIMPAR</button>
+<label><input id="follow" type="checkbox" checked> acompanhar</label>
+<a href="/update">OTA</a></header><div id="state">Conectando...</div>
+<pre id="output">Carregando logs...</pre><script>
+const out=document.getElementById('output'),state=document.getElementById('state'),
+pause=document.getElementById('pause'),clear=document.getElementById('clear'),
+follow=document.getElementById('follow');let stopped=false,busy=false,revision='';
+async function load(){if(stopped||busy)return;busy=true;try{
+const r=await fetch('/api/logs?revision='+revision,{cache:'no-store'});
+if(r.status===204){state.className='';state.textContent='Online - sem novos logs';return}
+if(!r.ok)throw Error(r.status);revision=r.headers.get('X-Log-Revision')||'';
+const text=await r.text();out.textContent=text||'(nenhum log no buffer)';
+if(follow.checked)out.scrollTop=out.scrollHeight;state.className='';
+state.textContent='Online - atualizado '+new Date().toLocaleTimeString();
+}catch(e){state.className='error';state.textContent='Falha ao consultar logs: '+e.message}
+finally{busy=false}}
+pause.onclick=()=>{stopped=!stopped;pause.textContent=stopped?'CONTINUAR':'PAUSAR';
+state.className=stopped?'paused':'';if(stopped)state.textContent='Atualização pausada';
+else load()};clear.onclick=async()=>{if(!confirm('Limpar os logs em memória?'))return;
+await fetch('/api/logs/clear',{method:'POST'});await load()};
+setInterval(load,1000);load();
+</script></main></body></html>
+)HTML";
+
 bool hasBinExtension(const String& filename) {
   if (filename.length() < 5U) return false;
   String normalized = filename;
@@ -86,14 +125,19 @@ bool OtaService::begin(const char* const username, const char* const password,
   server_.on(
       "/update", HTTP_POST, [this]() { handleUploadFinished(); },
       [this]() { handleUpload(); });
+  server_.on("/logs", HTTP_GET, [this]() { handleLogsPage(); });
+  server_.on("/api/logs", HTTP_GET, [this]() { handleLogsData(); });
+  server_.on("/api/logs/clear", HTTP_POST,
+             [this]() { handleLogsClear(); });
   server_.onNotFound([this]() {
     if (!authenticate(true)) return;
-    server_.send(404, "text/plain", "Use /update para atualizar o firmware.");
+    server_.send(404, "text/plain",
+                 "Use /update para OTA ou /logs para diagnosticos.");
   });
   server_.begin();
   started_ = true;
   KEEZER_LOG_INFO(kLogTag,
-                  "Web OTA ready: port=80 path=/update auth=ENABLED");
+                  "Web services ready: port=80 ota=/update logs=/logs auth=ENABLED");
   return true;
 }
 
@@ -138,6 +182,53 @@ void OtaService::handlePage() {
   if (!authenticate(true)) return;
   server_.sendHeader("Cache-Control", "no-store");
   server_.send_P(200, "text/html; charset=utf-8", kUpdatePage);
+}
+
+void OtaService::handleLogsPage() {
+  if (!authenticate(true)) return;
+  server_.sendHeader("Cache-Control", "no-store");
+  server_.send_P(200, "text/html; charset=utf-8", kLogsPage);
+}
+
+void OtaService::handleLogsData() {
+  if (!authenticate(true)) return;
+  const std::uint32_t revision = diagnostics::Logger::bufferRevision();
+  if (server_.hasArg("revision") &&
+      server_.arg("revision") == String(revision)) {
+    server_.send(204);
+    return;
+  }
+  server_.sendHeader("Cache-Control", "no-store");
+  server_.sendHeader("X-Log-Revision", String(revision));
+  server_.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server_.send(200, "text/plain; charset=utf-8", "");
+
+  const std::size_t lineCount =
+      diagnostics::Logger::bufferedLineCount();
+  std::array<char, 1'024U> chunk{};
+  std::size_t used = 0U;
+  for (std::size_t index = 0U; index < lineCount; ++index) {
+    if (chunk.size() - used < 193U) {
+      server_.sendContent(chunk.data(), used);
+      used = 0U;
+    }
+    const std::size_t length = diagnostics::Logger::copyBufferedLine(
+        index, chunk.data() + used, chunk.size() - used);
+    if (length == 0U) continue;
+    used += length;
+    chunk[used++] = '\n';
+  }
+  if (used > 0U) {
+    server_.sendContent(chunk.data(), used);
+  }
+  server_.sendContent("");
+}
+
+void OtaService::handleLogsClear() {
+  if (!authenticate(true)) return;
+  diagnostics::Logger::clearBuffer();
+  server_.sendHeader("Cache-Control", "no-store");
+  server_.send(200, "text/plain; charset=utf-8", "Logs limpos.");
 }
 
 void OtaService::handleUpload() {

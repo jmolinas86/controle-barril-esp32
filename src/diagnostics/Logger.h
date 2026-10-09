@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdarg>
 #include <cstdint>
 
@@ -19,10 +20,24 @@ class Logger final {
   static LogLevel level();
   static void log(LogLevel level, const char* tag, const char* format, ...)
       __attribute__((format(printf, 3, 4)));
+  static std::size_t bufferedLineCount();
+  static std::size_t copyBufferedLine(std::size_t index, char* destination,
+                                      std::size_t capacity);
+  static std::uint32_t bufferRevision();
+  static void clearBuffer();
 
  private:
+  static constexpr std::size_t kBufferedLineCount = 64U;
+  static constexpr std::size_t kBufferedLineBytes = 192U;
+
   static const char* levelName(LogLevel level);
+  static void appendToBuffer(const char* line);
+
   static LogLevel currentLevel_;
+  static char* bufferedLines_;
+  static std::size_t firstBufferedLine_;
+  static std::size_t bufferedLineCount_;
+  static std::uint32_t bufferRevision_;
 };
 
 }  // namespace keezer::diagnostics

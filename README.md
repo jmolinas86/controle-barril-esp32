@@ -48,6 +48,8 @@ depois da Fase 19.
 
 - validada e aprovada no controlador real em 12/09/2026;
 - página leve em `http://<IP-DO-CONTROLADOR>/update`;
+- monitor de diagnóstico em `http://<IP-DO-CONTROLADOR>/logs`, protegido pela
+  mesma autenticação e mantido somente em RAM;
 - autenticação HTTP Basic obrigatória;
 - aceita somente arquivo com extensão `.bin`;
 - grava exclusivamente a partição de aplicativo inativa;
@@ -376,7 +378,7 @@ Cada cenário transmite por cerca de 12 segundos e fica silencioso até completa
 ## Compilar
 
 ```powershell
-platformio run -e esp32_2432s028r
+platformio run -e esp32_2432s028
 ```
 
 Build HTTP/OTA da Fase 19.1 validado: 123.968 bytes de RAM estática (37,8%) e
@@ -386,8 +388,8 @@ Wi-Fi, o pool LVGL usa 40 KB e o buffer de renderização usa 24 linhas.
 ## Gravar e monitorar
 
 ```powershell
-platformio run -e esp32_2432s028r -t upload
-platformio device monitor -e esp32_2432s028r
+platformio run -e esp32_2432s028 -t upload
+platformio device monitor -e esp32_2432s028
 ```
 
 O monitor serial informa também mudanças da conexão da balança, UID NFC normalizado e pesos recebidos.

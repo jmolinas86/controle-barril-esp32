@@ -393,15 +393,16 @@ void ScreenManager::handleShowOta(void* const context) {
   if (self == nullptr || self->viewModel_ == nullptr ||
       self->contentRoot_ == nullptr) return;
   const app::NetworkViewData& network = self->viewModel_->network();
-  char message[120]{};
+  char message[160]{};
   if (network.connected && network.ipAddress[0] != '\0') {
     std::snprintf(message, sizeof(message),
-                  "Abra no navegador:\nhttp://%s/update", network.ipAddress.data());
+                  "OTA: http://%s/update\nLOGS: http://%s/logs",
+                  network.ipAddress.data(), network.ipAddress.data());
   } else {
     std::snprintf(message, sizeof(message),
                   "Conecte o controlador ao Wi-Fi para usar a atualizacao OTA.");
   }
-  self->actionModal_.showInfo(self->contentRoot_, "ATUALIZACAO OTA", message);
+  self->actionModal_.showInfo(self->contentRoot_, "SERVICOS WEB", message);
 }
 
 app::DisplaySaveResult ScreenManager::handleSaveDisplay(
